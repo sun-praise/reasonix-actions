@@ -38,7 +38,22 @@ Runs parallel reviewer personas on a PR and posts a synthesized comment.
     model: "deepseek-flash"
     team: "quality,security,performance"
     language: "zh"
+    max-diff-lines: "10000"
+    timeout-seconds: "900"
 ```
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `version` | `1.17.12` | Reasonix version to install. |
+| `install-source` | `sun-praise/deepseek-reasonix` | Owner/repo hosting the binary release. |
+| `model` | `deepseek-flash` | Reasonix model name. |
+| `deepseek-api-key` | required | DeepSeek API key. |
+| `team` | `quality,security,performance` | Comma-separated reviewer personas. |
+| `language` | `zh` | Review output language. |
+| `max-diff-lines` | `10000` | Skip review and post a warning if the diff is larger than this. |
+| `output-format` | `text` | `text` or `json`. |
+| `timeout-seconds` | `900` | Max runtime for the review command. |
+| `fail-on-error` | `true` | Fail the workflow if the review command errors. |
 
 ## Example workflow
 

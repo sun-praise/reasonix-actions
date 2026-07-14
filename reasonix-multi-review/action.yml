@@ -60,6 +60,10 @@ inputs:
     description: Overall timeout for the review command.
     required: false
     default: "900"
+  max-diff-lines:
+    description: Skip review if diff exceeds this many lines; post a warning comment.
+    required: false
+    default: "10000"
   fail-on-error:
     description: Fail the action if the review command exits non-zero.
     required: false
@@ -107,6 +111,7 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        MAX_DIFF_LINES: ${{ inputs.max-diff-lines }}
       run: |
         set -euo pipefail
         ref="${GITHUB_REF:-}"
@@ -119,7 +124,22 @@ runs:
           printf 'pr_number=\n' >>"$GITHUB_OUTPUT"
         fi
 
+        if [[ ! -s "${RUNNER_TEMP}/pr-diff.txt" ]]; then
+          printf 'skip=true\n' >>"$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        diff_lines="$(wc -l < "${RUNNER_TEMP}/pr-diff.txt" | tr -d ' ')"
+        printf 'diff_lines=%s\n' "$diff_lines" >>"$GITHUB_OUTPUT"
+        if [[ "$diff_lines" -gt "$MAX_DIFF_LINES" ]]; then
+          gh pr comment "$pr" --body "🤖 Reasonix review skipped: diff has ${diff_lines} lines, which exceeds the ${MAX_DIFF_LINES} line limit to keep context cost reasonable."
+          printf 'skip=true\n' >>"$GITHUB_OUTPUT"
+        else
+          printf 'skip=false\n' >>"$GITHUB_OUTPUT"
+        fi
+
     - id: review
+      if: ${{ steps.pr.outputs.skip != 'true' }}
       shell: bash
       env:
         REASONIX_HOME: ${{ steps.config.outputs.reasonix_home }}
@@ -169,6 +189,7 @@ runs:
         exit 0
 
     - id: comment
+      if: ${{ steps.pr.outputs.skip != 'true' }}
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
