@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check shell scripts
+        run: |
+          for f in setup-reasonix/*.sh; do
+            bash -n "$f"
+          done
+
+      - name: Validate action metadata
+        run: |
+          for f in setup-reasonix/action.yml reasonix-multi-review/action.yml; do
+            python3 -c "import yaml, sys; yaml.safe_load(open('$f'))" 2>/dev/null || python3 -c "import json, sys; json.load(open('$f'))"
+          done

@@ -1,0 +1,201 @@
+name: Reasonix Multi-Review
+description: Parallel multi-agent PR review using a custom Reasonix binary.
+branding:
+  icon: 'code'
+  color: 'blue'
+
+inputs:
+  version:
+    description: Reasonix version to install.
+    required: false
+    default: "1.17.12"
+  install-source:
+    description: GitHub owner/repo that hosts the Reasonix release with multi-review.
+    required: false
+    default: "sun-praise/deepseek-reasonix"
+  model:
+    description: Reasonix model name (must match a configured provider).
+    required: false
+    default: "deepseek-flash"
+  deepseek-api-key:
+    description: DeepSeek API key.
+    required: true
+  deepseek-base-url:
+    description: DeepSeek API base URL.
+    required: false
+    default: "https://api.deepseek.com"
+  deepseek-provider-model:
+    description: DeepSeek model ID sent to the API.
+    required: false
+    default: "deepseek-v4-flash"
+  github-token:
+    description: GitHub token for fetching diff and posting comments.
+    required: false
+    default: "${{ github.token }}"
+  team:
+    description: Comma-separated reviewer personas.
+    required: false
+    default: "quality,security,performance"
+  language:
+    description: Review language (zh or en).
+    required: false
+    default: "zh"
+  base:
+    description: Base branch/commit for the diff.
+    required: false
+    default: ""
+  instructions:
+    description: Extra instructions appended to every reviewer prompt.
+    required: false
+    default: ""
+  output-format:
+    description: Output format passed to reasonix multi-review.
+    required: false
+    default: "text"
+  max-steps:
+    description: Max tool-call rounds per reviewer.
+    required: false
+    default: "12"
+  timeout-seconds:
+    description: Overall timeout for the review command.
+    required: false
+    default: "900"
+  fail-on-error:
+    description: Fail the action if the review command exits non-zero.
+    required: false
+    default: "true"
+  cleanup-error-comments:
+    description: Delete previous error comments from this workflow on failure.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: sun-praise/reasonix-actions/setup-reasonix@v1
+      with:
+        version: ${{ inputs.version }}
+        install-source: ${{ inputs.install-source }}
+
+    - id: config
+      shell: bash
+      env:
+        REASONIX_HOME: ${{ runner.temp }}/reasonix-home
+        DEEPSEEK_API_KEY: ${{ inputs.deepseek-api-key }}
+        MODEL: ${{ inputs.model }}
+        DEEPSEEK_BASE_URL: ${{ inputs.deepseek-base-url }}
+        DEEPSEEK_PROVIDER_MODEL: ${{ inputs.deepseek-provider-model }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$REASONIX_HOME"
+        cat > "$REASONIX_HOME/config.toml" <<EOF
+        default_model = "$MODEL"
+
+        [[providers]]
+        name = "$MODEL"
+        kind = "openai"
+        base_url = "$DEEPSEEK_BASE_URL"
+        model = "$DEEPSEEK_PROVIDER_MODEL"
+        api_key_env = "DEEPSEEK_API_KEY"
+        EOF
+        cat > "$REASONIX_HOME/.env" <<EOF
+        DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY
+        EOF
+        printf 'reasonix_home=%s\n' "$REASONIX_HOME" >>"$GITHUB_OUTPUT"
+
+    - id: pr
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        ref="${GITHUB_REF:-}"
+        if [[ "$ref" =~ refs/pull/([0-9]+)/(merge|head) ]]; then
+          pr="${BASH_REMATCH[1]}"
+          gh pr diff "$pr" > "${RUNNER_TEMP}/pr-diff.txt" 2>/dev/null || echo "" > "${RUNNER_TEMP}/pr-diff.txt"
+          printf 'pr_number=%s\n' "$pr" >>"$GITHUB_OUTPUT"
+        else
+          echo "" > "${RUNNER_TEMP}/pr-diff.txt"
+          printf 'pr_number=\n' >>"$GITHUB_OUTPUT"
+        fi
+
+    - id: review
+      shell: bash
+      env:
+        REASONIX_HOME: ${{ steps.config.outputs.reasonix_home }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        if [[ ! -s "${RUNNER_TEMP}/pr-diff.txt" ]]; then
+          echo "No PR diff found; skipping review."
+          exit 0
+        fi
+        timeout="${{ inputs.timeout-seconds }}"
+        if [[ "$timeout" -gt 0 ]]; then
+          timeout_args="--signal=TERM ${timeout}s"
+        else
+          timeout_args=""
+        fi
+        set +e
+        if [[ -n "$timeout_args" ]]; then
+          timeout $timeout_args reasonix multi-review \
+            --diff "${RUNNER_TEMP}/pr-diff.txt" \
+            --team "${{ inputs.team }}" \
+            --model "${{ inputs.model }}" \
+            --language "${{ inputs.language }}" \
+            --instructions "${{ inputs.instructions }}" \
+            --output-format "${{ inputs.output-format }}" \
+            --max-steps "${{ inputs.max-steps }}" \
+            --base "${{ inputs.base }}" \
+            > "${RUNNER_TEMP}/reasonix-review.txt" 2> "${RUNNER_TEMP}/reasonix-review.err"
+        else
+          reasonix multi-review \
+            --diff "${RUNNER_TEMP}/pr-diff.txt" \
+            --team "${{ inputs.team }}" \
+            --model "${{ inputs.model }}" \
+            --language "${{ inputs.language }}" \
+            --instructions "${{ inputs.instructions }}" \
+            --output-format "${{ inputs.output-format }}" \
+            --max-steps "${{ inputs.max-steps }}" \
+            --base "${{ inputs.base }}" \
+            > "${RUNNER_TEMP}/reasonix-review.txt" 2> "${RUNNER_TEMP}/reasonix-review.err"
+        fi
+        rc=$?
+        set -e
+        printf 'review_exit_code=%s\n' "$rc" >>"$GITHUB_OUTPUT"
+        if [[ "$rc" -ne 0 ]]; then
+          cat "${RUNNER_TEMP}/reasonix-review.err" >&2
+        fi
+        exit 0
+
+    - id: comment
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        pr="${{ steps.pr.outputs.pr_number }}"
+        if [[ -z "$pr" ]]; then
+          echo "Not a PR event; skipping comment."
+          exit 0
+        fi
+        body_file="${RUNNER_TEMP}/reasonix-review.txt"
+        if [[ ! -f "$body_file" ]] || [[ ! -s "$body_file" ]]; then
+          echo "No review output to post."
+          exit 0
+        fi
+        {
+          echo "## 🤖 Reasonix Multi-Review"
+          echo
+          cat "$body_file"
+          echo
+          echo "---"
+          echo "*Generated by [reasonix-actions](https://github.com/sun-praise/reasonix-actions) · run [#${GITHUB_RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})*"
+        } > "${RUNNER_TEMP}/comment-body.txt"
+        gh pr comment "$pr" --body-file "${RUNNER_TEMP}/comment-body.txt"
+
+    - if: ${{ steps.review.outputs.review_exit_code != '0' && inputs.fail-on-error == 'true' }}
+      shell: bash
+      run: |
+        echo "reasonix multi-review exited with a non-zero code."
+        exit 1

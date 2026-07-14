@@ -1,0 +1,23 @@
+name: Reasonix Multi-Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  reasonix-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: sun-praise/reasonix-actions/reasonix-multi-review@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          model: deepseek-flash
+          team: "quality,security,performance"
+          language: zh
+          timeout-seconds: "900"

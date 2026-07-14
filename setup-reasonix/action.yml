@@ -1,0 +1,123 @@
+name: Setup Reasonix
+description: Install and cache the Reasonix CLI from a GitHub Release binary.
+branding:
+  icon: 'code'
+  color: 'blue'
+
+inputs:
+  version:
+    description: Reasonix version to install (e.g. 1.17.12). Must match the release tag.
+    required: false
+    default: "1.17.12"
+  install-source:
+    description: GitHub owner/repo to fetch the release from.
+    required: false
+    default: "sun-praise/deepseek-reasonix"
+  install-dir:
+    description: Directory where the reasonix binary should be installed.
+    required: false
+    default: ""
+  cache:
+    description: Cache the install directory with actions/cache.
+    required: false
+    default: "true"
+  cache-key:
+    description: Cache key suffix used to invalidate the install cache.
+    required: false
+    default: "v1"
+  install-attempts:
+    description: Number of installer retry attempts.
+    required: false
+    default: "3"
+  allow-preinstalled:
+    description: Reuse an existing reasonix found on PATH if it satisfies the version check.
+    required: false
+    default: "false"
+  min-version:
+    description: Minimum required version (semver). Defaults to inputs.version. Use "none" to disable.
+    required: false
+    default: ""
+
+outputs:
+  reasonix-path:
+    description: Resolved absolute path to the reasonix binary.
+    value: ${{ steps.metadata.outputs.reasonix_path }}
+  install-dir:
+    description: Resolved install directory.
+    value: ${{ steps.paths.outputs.install_dir }}
+  cache-hit:
+    description: Whether actions/cache restored a matching cache entry.
+    value: ${{ steps.metadata.outputs.cache_hit }}
+  version:
+    description: Resolved Reasonix version string.
+    value: ${{ steps.metadata.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: version
+      shell: bash
+      run: |
+        set -euo pipefail
+        effective="${{ inputs.min-version }}"
+        if [[ "$effective" == "none" ]]; then
+          effective=""
+        elif [[ -z "$effective" ]]; then
+          effective="${{ inputs.version }}"
+        fi
+        printf 'min_version=%s\n' "$effective" >>"$GITHUB_OUTPUT"
+        printf 'version=%s\n' "${{ inputs.version }}" >>"$GITHUB_OUTPUT"
+
+    - id: paths
+      shell: bash
+      env:
+        INPUT_INSTALL_DIR: ${{ inputs.install-dir }}
+      run: |
+        set -euo pipefail
+        install_dir="$INPUT_INSTALL_DIR"
+        if [[ -z "$install_dir" ]]; then
+          install_dir="${RUNNER_TOOL_CACHE:-$HOME/.cache}/reasonix/bin"
+        fi
+        printf 'install_dir=%s\n' "$install_dir" >>"$GITHUB_OUTPUT"
+
+    - id: key
+      shell: bash
+      env:
+        INPUT_INSTALL_SOURCE: ${{ inputs.install-source }}
+      run: |
+        set -euo pipefail
+        source_hash="$(printf '%s' "$INPUT_INSTALL_SOURCE" | sha256sum | cut -d' ' -f1)"
+        printf 'source_hash=%s\n' "$source_hash" >>"$GITHUB_OUTPUT"
+
+    - id: cache
+      if: ${{ inputs.cache == 'true' }}
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.paths.outputs.install_dir }}
+        key: setup-reasonix-${{ runner.os }}-${{ runner.arch }}-${{ steps.key.outputs.source_hash }}-${{ steps.version.outputs.version }}-${{ inputs.cache-key }}
+
+    - id: install
+      shell: bash
+      env:
+        REASONIX_INSTALL_DIR: ${{ steps.paths.outputs.install_dir }}
+        REASONIX_VERSION: ${{ inputs.version }}
+        REASONIX_INSTALL_SOURCE: ${{ inputs.install-source }}
+        REASONIX_INSTALL_ATTEMPTS: ${{ inputs.install-attempts }}
+        REASONIX_ALLOW_PREINSTALLED: ${{ inputs.allow-preinstalled }}
+        REASONIX_MIN_VERSION: ${{ steps.version.outputs.min_version }}
+      run: ${{ github.action_path }}/install-reasonix.sh
+
+    - id: metadata
+      shell: bash
+      env:
+        REASONIX_INSTALL_DIR: ${{ steps.paths.outputs.install_dir }}
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        export PATH="$REASONIX_INSTALL_DIR:$PATH"
+        reasonix_path="$(command -v reasonix)"
+        version="$(reasonix --version)"
+        cache_hit="${CACHE_HIT:-false}"
+        printf 'reasonix_path=%s\n' "$reasonix_path" >>"$GITHUB_OUTPUT"
+        printf 'version=%s\n' "$version" >>"$GITHUB_OUTPUT"
+        printf 'cache_hit=%s\n' "$cache_hit" >>"$GITHUB_OUTPUT"
