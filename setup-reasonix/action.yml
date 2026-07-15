@@ -8,7 +8,7 @@ inputs:
   version:
     description: Reasonix version to install (e.g. 1.17.12). Must match the release tag.
     required: false
-    default: "1.17.12"
+    default: "1.17.13"
   install-source:
     description: GitHub owner/repo to fetch the release from.
     required: false

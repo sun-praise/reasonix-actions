@@ -22,7 +22,7 @@ Installs and caches the Reasonix CLI.
 ```yaml
 - uses: sun-praise/reasonix-actions/setup-reasonix@v1
   with:
-    version: "1.17.12"
+    version: "1.17.13"
     install-source: "sun-praise/deepseek-reasonix"
 ```
 
@@ -44,7 +44,7 @@ Runs parallel reviewer personas on a PR and posts a synthesized comment.
 
 | Input | Default | Description |
 |-------|---------|-------------|
-| `version` | `1.17.12` | Reasonix version to install. |
+| `version` | `1.17.13` | Reasonix version to install. |
 | `install-source` | `sun-praise/deepseek-reasonix` | Owner/repo hosting the binary release. |
 | `model` | `deepseek-flash` | Reasonix model name. |
 | `deepseek-api-key` | required | DeepSeek API key. |
