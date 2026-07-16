@@ -55,6 +55,12 @@ Runs parallel reviewer personas on a PR and posts a synthesized comment.
 | `timeout-seconds` | `900` | Max runtime for the review command. |
 | `fail-on-error` | `true` | Fail the workflow if the review command errors. |
 
+**Outputs**
+
+| Output | Description |
+|--------|-------------|
+| `comment-url` | URL of the posted PR comment. |
+
 ## Example workflow
 
 ```yaml
