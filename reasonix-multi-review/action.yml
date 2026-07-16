@@ -81,7 +81,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: sun-praise/reasonix-actions/setup-reasonix@v1
+    - uses: ./setup-reasonix
       with:
         version: ${{ inputs.version }}
         install-source: ${{ inputs.install-source }}

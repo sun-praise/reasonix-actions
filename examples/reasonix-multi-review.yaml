@@ -32,4 +32,6 @@ jobs:
           timeout-seconds: "900"
 
       - name: Print review comment URL
-        run: echo "${{ steps.review.outputs.comment-url }}"
+        env:
+          COMMENT_URL: ${{ steps.review.outputs.comment-url }}
+        run: echo "$COMMENT_URL"
