@@ -20,7 +20,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: sun-praise/reasonix-actions/reasonix-multi-review@v1
+      - id: review
+        uses: sun-praise/reasonix-actions/reasonix-multi-review@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -29,3 +30,6 @@ jobs:
           language: zh
           max-diff-lines: "10000"
           timeout-seconds: "900"
+
+      - name: Print review comment URL
+        run: echo "${{ steps.review.outputs.comment-url }}"
