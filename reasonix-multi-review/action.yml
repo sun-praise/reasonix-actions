@@ -107,6 +107,8 @@ runs:
         model = "$DEEPSEEK_PROVIDER_MODEL"
         api_key_env = "DEEPSEEK_API_KEY"
         EOF
+        printf 'DEEPSEEK_API_KEY=%s\n' "$DEEPSEEK_API_KEY" > "$REASONIX_HOME/.env"
+        chmod 600 "$REASONIX_HOME/.env"
         printf 'reasonix_home=%s\n' "$REASONIX_HOME" >>"$GITHUB_OUTPUT"
 
     - id: pr
@@ -146,7 +148,6 @@ runs:
       env:
         REASONIX_HOME: ${{ steps.config.outputs.reasonix_home }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
-        DEEPSEEK_API_KEY: ${{ inputs.deepseek-api-key }}
         TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
         TEAM: ${{ inputs.team }}
         MODEL: ${{ inputs.model }}
