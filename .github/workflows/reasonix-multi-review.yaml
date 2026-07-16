@@ -1,0 +1,35 @@
+name: Reasonix Multi-Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  reasonix-review:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: review
+        uses: sun-praise/reasonix-actions/reasonix-multi-review@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          model: deepseek-flash
+          team: "quality,security,performance"
+          language: zh
+          max-diff-lines: "10000"
+          timeout-seconds: "900"
+
+      - name: Print review comment URL
+        run: echo "${{ steps.review.outputs.comment-url }}"
