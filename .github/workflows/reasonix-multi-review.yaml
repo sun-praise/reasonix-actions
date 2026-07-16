@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - id: review
-        uses: sun-praise/reasonix-actions/reasonix-multi-review@v1
+        uses: ./reasonix-multi-review
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}

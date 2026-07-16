@@ -107,9 +107,8 @@ runs:
         model = "$DEEPSEEK_PROVIDER_MODEL"
         api_key_env = "DEEPSEEK_API_KEY"
         EOF
-        cat > "$REASONIX_HOME/.env" <<EOF
-        DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY
-        EOF
+        printf 'DEEPSEEK_API_KEY=%s\n' "$DEEPSEEK_API_KEY" > "$REASONIX_HOME/.env"
+        chmod 600 "$REASONIX_HOME/.env"
         printf 'reasonix_home=%s\n' "$REASONIX_HOME" >>"$GITHUB_OUTPUT"
 
     - id: pr
@@ -149,40 +148,46 @@ runs:
       env:
         REASONIX_HOME: ${{ steps.config.outputs.reasonix_home }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
+        TEAM: ${{ inputs.team }}
+        MODEL: ${{ inputs.model }}
+        LANGUAGE: ${{ inputs.language }}
+        INSTRUCTIONS: ${{ inputs.instructions }}
+        OUTPUT_FORMAT: ${{ inputs.output-format }}
+        MAX_STEPS: ${{ inputs.max-steps }}
+        BASE: ${{ inputs.base }}
       run: |
         set -euo pipefail
         if [[ ! -s "${RUNNER_TEMP}/pr-diff.txt" ]]; then
           echo "No PR diff found; skipping review."
           exit 0
         fi
-        timeout="${{ inputs.timeout-seconds }}"
-        if [[ "$timeout" -gt 0 ]]; then
-          timeout_args="--signal=TERM ${timeout}s"
-        else
-          timeout_args=""
+        timeout_args=""
+        if [[ "$TIMEOUT_SECONDS" -gt 0 ]]; then
+          timeout_args="--signal=TERM ${TIMEOUT_SECONDS}s"
         fi
         set +e
         if [[ -n "$timeout_args" ]]; then
           timeout $timeout_args reasonix multi-review \
             --diff "${RUNNER_TEMP}/pr-diff.txt" \
-            --team "${{ inputs.team }}" \
-            --model "${{ inputs.model }}" \
-            --language "${{ inputs.language }}" \
-            --instructions "${{ inputs.instructions }}" \
-            --output-format "${{ inputs.output-format }}" \
-            --max-steps "${{ inputs.max-steps }}" \
-            --base "${{ inputs.base }}" \
+            --team "$TEAM" \
+            --model "$MODEL" \
+            --language "$LANGUAGE" \
+            --instructions "$INSTRUCTIONS" \
+            --output-format "$OUTPUT_FORMAT" \
+            --max-steps "$MAX_STEPS" \
+            --base "$BASE" \
             > "${RUNNER_TEMP}/reasonix-review.txt" 2> "${RUNNER_TEMP}/reasonix-review.err"
         else
           reasonix multi-review \
             --diff "${RUNNER_TEMP}/pr-diff.txt" \
-            --team "${{ inputs.team }}" \
-            --model "${{ inputs.model }}" \
-            --language "${{ inputs.language }}" \
-            --instructions "${{ inputs.instructions }}" \
-            --output-format "${{ inputs.output-format }}" \
-            --max-steps "${{ inputs.max-steps }}" \
-            --base "${{ inputs.base }}" \
+            --team "$TEAM" \
+            --model "$MODEL" \
+            --language "$LANGUAGE" \
+            --instructions "$INSTRUCTIONS" \
+            --output-format "$OUTPUT_FORMAT" \
+            --max-steps "$MAX_STEPS" \
+            --base "$BASE" \
             > "${RUNNER_TEMP}/reasonix-review.txt" 2> "${RUNNER_TEMP}/reasonix-review.err"
         fi
         rc=$?
